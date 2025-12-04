@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { QuizData, QuizMode } from '../types';
-import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy, Send, School, User, GraduationCap, Loader2 } from 'lucide-react';
+import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy, Send, School, User, GraduationCap, Loader2, Play } from 'lucide-react';
 import { sendScoreReport } from '../services/emailService';
 
 interface QuizRunnerProps {
@@ -14,6 +14,8 @@ interface QuizRunnerProps {
 const ASSESSMENT_DURATION = 60 * 60; // 60 minutes in seconds
 
 export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish, onBack }) => {
+  // Quiz State
+  const [quizStarted, setQuizStarted] = useState(false); // New state to gatekeep the quiz
   const [part1Answers, setPart1Answers] = useState<Record<number, number>>({});
   const [part2Answers, setPart2Answers] = useState<Record<string, boolean | null>>({});
   const [part3Answers, setPart3Answers] = useState<Record<number, string>>({});
@@ -35,21 +37,30 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
 
   // Timer countdown logic
   useEffect(() => {
-    if (mode !== 'ASSESSMENT' || isSubmitted) return;
+    // Timer only runs if mode is ASSESSMENT, Quiz has STARTED, and NOT submitted
+    if (mode !== 'ASSESSMENT' || isSubmitted || !quizStarted) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [mode, isSubmitted]);
+  }, [mode, isSubmitted, quizStarted]);
 
   // Auto-submit when time runs out
   useEffect(() => {
-    if (mode === 'ASSESSMENT' && timeLeft === 0 && !isSubmitted) {
+    if (mode === 'ASSESSMENT' && quizStarted && timeLeft === 0 && !isSubmitted) {
       handleAutoSubmit();
     }
-  }, [timeLeft, mode, isSubmitted]);
+  }, [timeLeft, mode, isSubmitted, quizStarted]);
+
+  const handleStartQuiz = () => {
+    if (!studentName.trim() || !className.trim() || !schoolName.trim()) {
+      alert("Vui lòng điền đầy đủ Họ tên, Lớp và Trường để bắt đầu!");
+      return;
+    }
+    setQuizStarted(true);
+  };
 
   const calculateScore = () => {
     let score = 0;
@@ -112,7 +123,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
 
   const handleSendReport = async () => {
     if (!studentName || !className || !schoolName) {
-      setEmailError('Vui lòng điền đầy đủ thông tin trước khi gửi.');
+      setEmailError('Vui lòng kiểm tra lại thông tin.');
       return;
     }
 
@@ -189,6 +200,91 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
     );
   };
 
+  // --- INTRO SCREEN (Before Start) ---
+  if (!quizStarted) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-4">
+        <button onClick={onBack} className="text-slate-500 hover:text-slate-800 flex items-center gap-2 mb-8 group transition-colors">
+          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          <span className="font-medium">Quay lại danh sách</span>
+        </button>
+
+        <div className="bg-white rounded-3xl shadow-xl border border-indigo-50 overflow-hidden relative">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-4 opacity-10">
+                <User className="w-32 h-32" />
+             </div>
+             <h2 className="text-2xl font-bold mb-2">Thông tin thí sinh</h2>
+             <p className="text-blue-100">Vui lòng điền đầy đủ thông tin để bắt đầu làm bài.</p>
+          </div>
+
+          <div className="p-8 space-y-6">
+             <div className="space-y-4">
+               <div>
+                 <label className="block text-sm font-bold text-slate-700 mb-2">Họ và tên học sinh <span className="text-red-500">*</span></label>
+                 <div className="relative">
+                   <input 
+                      type="text" 
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      placeholder="Ví dụ: Nguyễn Văn An"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none transition-all"
+                   />
+                   <User className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Lớp <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <input 
+                          type="text" 
+                          value={className}
+                          onChange={(e) => setClassName(e.target.value)}
+                          placeholder="Ví dụ: 6A1"
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none transition-all"
+                      />
+                      <GraduationCap className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Trường <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <input 
+                          type="text" 
+                          value={schoolName}
+                          onChange={(e) => setSchoolName(e.target.value)}
+                          placeholder="Ví dụ: THCS Cầu Giấy"
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none transition-all"
+                      />
+                      <School className="w-5 h-5 text-slate-400 absolute left-3 top-3.5" />
+                    </div>
+                  </div>
+               </div>
+             </div>
+
+             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
+                <Clock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                <div className="text-sm text-blue-800">
+                   <p className="font-bold mb-1">Thời gian làm bài: {ASSESSMENT_DURATION / 60} phút</p>
+                   <p>Đồng hồ sẽ bắt đầu tính giờ ngay khi bạn bấm nút "Bắt đầu làm bài". Chúc bạn đạt kết quả tốt!</p>
+                </div>
+             </div>
+
+             <button 
+                onClick={handleStartQuiz}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
+             >
+                <Play className="w-5 h-5 fill-current" /> Bắt đầu làm bài
+             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- QUIZ CONTENT ---
   const renderPart1 = () => (
     <section className="space-y-6">
       <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
@@ -560,17 +656,17 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
             {/* Content Body */}
             <div className="p-6 bg-white space-y-6">
                 
-                {/* Student Info Form */}
+                {/* Student Info (Read-only/Edit) */}
                 <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide mb-2 flex items-center gap-2">
-                    <User className="w-4 h-4" /> Thông tin học sinh
+                    <User className="w-4 h-4" /> Thông tin đã đăng ký
                   </h4>
                   <input 
                     type="text" 
                     placeholder="Họ và tên học sinh" 
                     value={studentName}
                     onChange={(e) => setStudentName(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
                   />
                   <div className="grid grid-cols-2 gap-3">
                      <div className="relative">
@@ -579,7 +675,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                           placeholder="Lớp" 
                           value={className}
                           onChange={(e) => setClassName(e.target.value)}
-                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
                         />
                         <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                      </div>
@@ -589,7 +685,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                           placeholder="Trường" 
                           value={schoolName}
                           onChange={(e) => setSchoolName(e.target.value)}
-                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
                         />
                         <School className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                      </div>
