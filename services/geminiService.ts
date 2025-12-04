@@ -6,33 +6,12 @@ let genAIInstance: GoogleGenAI | null = null;
 const getAI = () => {
   if (genAIInstance) return genAIInstance;
 
-  let apiKey = '';
-  
-  // Priority 1: Vite Environment Variable (Standard for Vercel/Vite)
-  try {
-    // Cast import.meta to any to avoid TS errors if vite types are missing in specific environments
-    const meta = import.meta as any;
-    if (meta && meta.env && meta.env.VITE_API_KEY) {
-      apiKey = meta.env.VITE_API_KEY;
-    }
-  } catch (e) {
-    console.warn("Could not access import.meta.env");
-  }
-
-  // Priority 2: Process Environment (Fallback for local/legacy)
-  if (!apiKey) {
-    try {
-      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-        apiKey = process.env.API_KEY;
-      }
-    } catch (e) {
-      // Ignore process access errors
-    }
-  }
+  // Following guideline: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+  const apiKey = process.env.API_KEY;
 
   if (!apiKey) {
-    console.error("Thiếu API Key. Vui lòng kiểm tra biến môi trường VITE_API_KEY");
-    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'VITE_API_KEY'.");
+    console.error("Thiếu API Key. Vui lòng kiểm tra biến môi trường process.env.API_KEY");
+    throw new Error("Không tìm thấy API Key (process.env.API_KEY).");
   }
 
   genAIInstance = new GoogleGenAI({ apiKey });
