@@ -19,6 +19,9 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const [part1Answers, setPart1Answers] = useState<Record<number, number>>({});
   const [part2Answers, setPart2Answers] = useState<Record<string, boolean | null>>({});
   const [part3Answers, setPart3Answers] = useState<Record<number, string>>({});
+  // FIX: Hoist part3 revealed state to top level instead of inside map loop
+  const [part3Revealed, setPart3Revealed] = useState<Record<number, boolean>>({}); 
+  
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -472,7 +475,8 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
              isMatch = Math.abs(userNum - correctNum) < 0.0001;
           }
 
-          const [revealed, setRevealed] = useState(false);
+          // FIX: Use top-level state for 'revealed' instead of useState inside map loop
+          const revealed = part3Revealed[q.id] || false;
           const showResult = isSubmitted || revealed;
 
           return (
@@ -508,7 +512,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                 <div className="flex justify-between items-center mt-3 h-8">
                    {mode === 'PRACTICE' && !isSubmitted && !revealed && (
                     <button 
-                      onClick={() => setRevealed(true)}
+                      onClick={() => setPart3Revealed(prev => ({ ...prev, [q.id]: true }))}
                       className="px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 text-sm font-bold whitespace-nowrap transition-colors"
                     >
                       Kiểm tra
