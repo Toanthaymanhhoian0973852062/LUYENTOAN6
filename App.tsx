@@ -23,9 +23,7 @@ export default function App() {
   const [newsLoading, setNewsLoading] = useState(false);
 
   // Load progress on mount
-useEffect(() => {
-  // Kiểm tra môi trường browser
-  if (typeof window !== 'undefined') {
+  useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -34,29 +32,26 @@ useEffect(() => {
         console.error("Failed to parse progress", e);
       }
     }
-  }
 
-  // Fetch News
-  const fetchNews = async () => {
-    setNewsLoading(true);
-    try {
-      const data = await generateMathNews();
-      setNews(data);
-    } catch (e) {
-      console.error("Failed to fetch news");
-    } finally {
-      setNewsLoading(false);
-    }
-  };
-  fetchNews();
-}, []);
+    // Fetch News
+    const fetchNews = async () => {
+      setNewsLoading(true);
+      try {
+        const data = await generateMathNews();
+        setNews(data);
+      } catch (e) {
+        console.error("Failed to fetch news");
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+    fetchNews();
+  }, []);
 
-// Save progress on change
-useEffect(() => {
-  if (typeof window !== 'undefined') {
+  // Save progress on change
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  }
-}, [progress]);
+  }, [progress]);
 
   const handleLessonSelect = async (lessonId: string, title: string) => {
     if (mode === 'ASSESSMENT' && isLocked(lessonId)) {
