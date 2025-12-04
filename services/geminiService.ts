@@ -1,5 +1,3 @@
-/// <reference types="vite/client" />
-
 import { GoogleGenAI, Type, Content } from "@google/genai";
 import { QuizData, MathNews } from "../types";
 
@@ -11,8 +9,10 @@ const getAI = () => {
   let apiKey = '';
   
   // Priority 1: Vite Environment Variable (Standard for Vercel/Vite)
-  if (import.meta.env && import.meta.env.VITE_API_KEY) {
-    apiKey = import.meta.env.VITE_API_KEY;
+  // Cast import.meta to any to avoid TS errors if vite types are missing
+  const meta = import.meta as any;
+  if (meta.env && meta.env.VITE_API_KEY) {
+    apiKey = meta.env.VITE_API_KEY;
   }
   // Priority 2: Process Environment (Fallback/Legacy)
   else {
@@ -33,6 +33,35 @@ const getAI = () => {
   return genAIInstance;
 };
 
+// Fallback data when API Quota is exceeded
+const FALLBACK_NEWS_ITEMS: MathNews[] = [
+  {
+    title: "Bí mật của số 0",
+    content: "Bạn có biết? Số 0 là con số duy nhất không thể biểu diễn bằng chữ số La Mã. Người La Mã cổ đại không có ký hiệu riêng cho số 0!",
+    imageUrl: "https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?w=800&q=80"
+  },
+  {
+    title: "Hình Lục Giác Của Loài Ong",
+    content: "Tại sao tổ ong lại hình lục giác? Toán học chứng minh rằng hình lục giác giúp tiết kiệm sáp ong nhất mà vẫn chứa được lượng mật tối đa.",
+    imageUrl: "https://images.unsplash.com/photo-1587593810167-a6492031e5e8?w=800&q=80"
+  },
+  {
+    title: "Dãy số Fibonacci trong tự nhiên",
+    content: "Số cánh hoa của nhiều loài hoa thường tuân theo dãy số Fibonacci (1, 1, 2, 3, 5, 8...). Ví dụ hoa loa kèn thường có 3 cánh, hoa mao lương có 5 cánh.",
+    imageUrl: "https://images.unsplash.com/photo-1507646870321-dde51f675867?w=800&q=80"
+  },
+  {
+    title: "Tháp Eiffel và Hình học",
+    content: "Tháp Eiffel được thiết kế dựa trên hàng ngàn hình tam giác ghép lại. Hình tam giác là hình có cấu trúc vững chắc nhất trong kiến trúc.",
+    imageUrl: "https://images.unsplash.com/photo-1543349689-9a4d426bee8e?w=800&q=80"
+  },
+  {
+    title: "Vẻ đẹp của Fractal",
+    content: "Bông súp lơ xanh Romanesco là một ví dụ tuyệt vời về hình học Fractal trong tự nhiên, nơi mỗi chồi nhỏ là bản sao thu nhỏ của chồi lớn.",
+    imageUrl: "https://images.unsplash.com/photo-1590595906931-81f04f0ccebb?w=800&q=80"
+  }
+];
+
 export const generateQuiz = async (topic: string, description: string): Promise<QuizData> => {
   try {
     const ai = getAI();
@@ -47,15 +76,18 @@ export const generateQuiz = async (topic: string, description: string): Promise<
          
       2. Phần 2: Đúng/Sai (4.0 điểm).
          - 4 câu hỏi lớn. Mỗi câu hỏi lớn gồm 1 đề dẫn và 4 ý con (a,b,c,d).
+         - Yêu cầu: Đề dẫn phải là một TÌNH HUỐNG THỰC TẾ (ví dụ: tính tiền đi chợ, đo đạc sân vườn, nhiệt độ các thành phố, chia nhóm học sinh...).
          - Mỗi ý con đúng được 0.25đ. Tổng 16 ý con.
          - Kèm theo giải thích cho từng ý (explanation).
          
       3. Phần 3: Trả lời ngắn (3.0 điểm).
          - 6 câu hỏi. Mỗi câu 0.5đ.
-         - Học sinh tự điền số hoặc kết quả ngắn gọn.
+         - Yêu cầu: Câu hỏi phải là bài toán đố có yếu tố THỰC TẾ.
+         - QUAN TRỌNG: Kết quả BẮT BUỘC phải là MỘT CON SỐ (Số tự nhiên hoặc số thập phân).
+         - Trường 'correctAnswer' CHỈ ĐƯỢC CHỨA SỐ (ví dụ: "15", "2.5", "-10"), KHÔNG được chứa đơn vị hay chữ cái.
          - Kèm theo giải thích/cách giải (explanation).
          
-      Yêu cầu:
+      Yêu cầu chung:
       - Nội dung bám sát sách giáo khoa Kết nối tri thức.
       - Câu hỏi đa dạng: Nhận biết, Thông hiểu, Vận dụng.
       - Trả về JSON thuần túy.
@@ -171,7 +203,7 @@ export const generateMathNews = async (): Promise<MathNews> => {
     });
 
     const newsData = JSON.parse(textResponse.text || "{}");
-    if (!newsData.title) return { title: "Toán học vui", content: "Chào mừng bạn đến với ứng dụng.", imageUrl: undefined };
+    if (!newsData.title) throw new Error("Invalid news data");
 
     // Step 2: Generate Image using the prompt from Step 1
     let imageUrl: string | undefined = undefined;
@@ -196,7 +228,7 @@ export const generateMathNews = async (): Promise<MathNews> => {
         }
       }
     } catch (imgError) {
-      console.error("Error generating image:", imgError);
+      console.warn("Image generation failed (likely quota), skipping image.", imgError);
     }
 
     return {
@@ -205,13 +237,19 @@ export const generateMathNews = async (): Promise<MathNews> => {
       imageUrl: imageUrl
     };
 
-  } catch (error) {
-    console.error("Error generating news:", error);
-    return {
-      title: "Góc Toán Học",
-      content: "Mỗi ngày một niềm vui với những con số.",
-      imageUrl: undefined
-    };
+  } catch (error: any) {
+    // Graceful fallback for API Quota Exceeded or other errors
+    const isQuotaError = error.status === 429 || error.message?.includes('quota') || error.message?.includes('429');
+    
+    if (isQuotaError) {
+       console.warn("Gemini API Quota Exceeded for News. Using fallback content.");
+    } else {
+       console.error("Error generating news:", error);
+    }
+
+    // Return a random fallback news item
+    const randomIndex = Math.floor(Math.random() * FALLBACK_NEWS_ITEMS.length);
+    return FALLBACK_NEWS_ITEMS[randomIndex];
   }
 };
 

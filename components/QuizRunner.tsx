@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { QuizData, QuizMode } from '../types';
-import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy } from 'lucide-react';
+import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy, Send, School, User, GraduationCap, Loader2 } from 'lucide-react';
+import { sendScoreReport } from '../services/emailService';
 
 interface QuizRunnerProps {
   quizData: QuizData;
@@ -20,6 +22,16 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [instantFeedback, setInstantFeedback] = useState(mode === 'PRACTICE');
   const [timeLeft, setTimeLeft] = useState(ASSESSMENT_DURATION);
+
+  // Student Info State
+  const [studentName, setStudentName] = useState('');
+  const [className, setClassName] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  
+  // Email Sending State
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   // Timer countdown logic
   useEffect(() => {
@@ -62,9 +74,20 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
 
     // Part 3: 6 questions * 0.5 = 3.0 points
     quizData.part3.forEach(q => {
-      const userAns = part3Answers[q.id]?.trim().toLowerCase();
-      const correctAns = String(q.correctAnswer).trim().toLowerCase();
-      if (userAns && userAns === correctAns) {
+      // Normalize comparison: replace commas with dots for decimals, trim whitespace
+      const userAns = part3Answers[q.id]?.trim().replace(',', '.');
+      const correctAns = String(q.correctAnswer).trim().replace(',', '.');
+      
+      // Use parseFloat for numeric comparison to handle 2.5 vs 2.50
+      const userNum = parseFloat(userAns);
+      const correctNum = parseFloat(correctAns);
+
+      if (!isNaN(userNum) && !isNaN(correctNum)) {
+         if (Math.abs(userNum - correctNum) < 0.0001) {
+            score += 0.5;
+         }
+      } else if (userAns === correctAns) {
+        // Fallback for non-numeric exact matches
         score += 0.5;
       }
     });
@@ -85,6 +108,32 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const handleAutoSubmit = () => {
     setIsSubmitted(true);
     setShowResultModal(true);
+  };
+
+  const handleSendReport = async () => {
+    if (!studentName || !className || !schoolName) {
+      setEmailError('Vui lòng điền đầy đủ thông tin trước khi gửi.');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setEmailError('');
+
+    try {
+      await sendScoreReport({
+        studentName,
+        className,
+        schoolName,
+        score: calculateScore(),
+        topic: quizData.topic
+      });
+      setEmailSent(true);
+    } catch (error) {
+      console.error(error);
+      setEmailError('Gửi thất bại. Vui lòng kiểm tra kết nối hoặc cấu hình.');
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const handleShare = async () => {
@@ -314,12 +363,19 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
     <section className="space-y-6 mt-12">
       <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-lg shadow-sm">
         <h3 className="text-lg font-bold text-orange-900">Phần 3: Trả lời ngắn (3.0 điểm)</h3>
-        <p className="text-sm text-orange-700">6 câu hỏi - 0.5 điểm/câu</p>
+        <p className="text-sm text-orange-700">6 câu hỏi - 0.5 điểm/câu (Nhập số)</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {quizData.part3.map((q, idx) => {
           const val = part3Answers[q.id] || '';
-          const isMatch = val.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase();
+          const userNum = parseFloat(val.replace(',', '.'));
+          const correctNum = parseFloat(String(q.correctAnswer).replace(',', '.'));
+          
+          let isMatch = false;
+          if(!isNaN(userNum) && !isNaN(correctNum)) {
+             isMatch = Math.abs(userNum - correctNum) < 0.0001;
+          }
+
           const [revealed, setRevealed] = useState(false);
           const showResult = isSubmitted || revealed;
 
@@ -332,10 +388,11 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
               <div className="mt-auto">
                 <div className="relative">
                   <input
-                    type="text"
+                    type="number"
+                    step="any"
                     disabled={isSubmitted || (revealed && instantFeedback)}
                     value={val}
-                    placeholder="Nhập kết quả..."
+                    placeholder="Nhập số kết quả..."
                     onChange={(e) => setPart3Answers(prev => ({ ...prev, [q.id]: e.target.value }))}
                     className={`w-full p-4 pr-12 rounded-xl border-2 outline-none transition-all text-lg font-medium ${
                       showResult
@@ -391,7 +448,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
          </div>
 
          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            {/* Timer Display for Assessment Mode */}
+            {/* Timer Display */}
             {mode === 'ASSESSMENT' && !isSubmitted && (
                <div className={`flex items-center gap-2 font-mono font-bold text-lg px-4 py-1.5 rounded-xl border shadow-sm ${timeLeft < 300 ? 'text-red-600 bg-red-50 border-red-200 animate-pulse' : 'text-slate-700 bg-white border-slate-200'}`}>
                    <Clock className="w-5 h-5" />
@@ -483,67 +540,115 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
 
       {/* Result Modal Overlay */}
       {isSubmitted && showResultModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 relative my-8">
             {/* Modal Header with Score */}
-            <div className={`p-10 text-center text-white relative overflow-hidden ${calculateScore() >= 8 || mode === 'PRACTICE' ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-orange-500 to-red-600'}`}>
+            <div className={`p-8 text-center text-white relative overflow-hidden ${calculateScore() >= 8 || mode === 'PRACTICE' ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-orange-500 to-red-600'}`}>
                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                
                <div className="relative z-10">
-                 <div className="inline-block p-4 rounded-full bg-white/20 backdrop-blur-sm mb-4 border border-white/30 shadow-inner">
-                    <Trophy className="w-12 h-12 text-white" />
-                 </div>
-                 <div className="text-7xl font-black mb-2 drop-shadow-lg tracking-tight">{calculateScore()}<span className="text-4xl opacity-80 font-bold">/10</span></div>
-                 <h3 className="text-2xl font-bold mb-2">
+                 <div className="text-6xl font-black mb-2 drop-shadow-lg tracking-tight">{calculateScore()}<span className="text-3xl opacity-80 font-bold">/10</span></div>
+                 <h3 className="text-xl font-bold mb-1">
                    {mode === 'PRACTICE' 
-                      ? "Hoàn thành luyện tập!" 
-                      : calculateScore() >= 8 ? "Xuất sắc! 🎉" : "Chưa đạt yêu cầu 😢"
+                      ? "Hoàn thành!" 
+                      : calculateScore() >= 8 ? "Xuất sắc! 🎉" : "Cần cố gắng 😢"
                    }
                  </h3>
-                 <p className="opacity-90 font-medium">
-                   {mode === 'PRACTICE' 
-                      ? "Bạn đã làm rất tốt. Hãy xem lại giải thích chi tiết." 
-                      : calculateScore() >= 8 ? "Bạn đã nắm vững kiến thức bài này." : "Cần đạt tối thiểu 8.0 điểm."
-                   }
-                 </p>
                </div>
             </div>
 
-            {/* Actions */}
-            <div className="p-6 space-y-3 bg-white">
-                {/* Primary Action */}
-                <button 
-                  onClick={() => onFinish(calculateScore())}
-                  className={`w-full py-4 rounded-xl font-bold text-lg text-white shadow-xl transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3
-                    ${(calculateScore() >= 8 || mode === 'PRACTICE') 
-                        ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' 
-                        : 'bg-slate-700 hover:bg-slate-800 shadow-slate-300'
-                    }`}
-                >
-                  {(calculateScore() >= 8 || mode === 'PRACTICE') ? (
-                    <><ArrowRight className="w-6 h-6" /> {mode === 'PRACTICE' ? "Chọn bài khác" : "Học bài tiếp theo"}</>
-                  ) : (
-                    <><RotateCcw className="w-6 h-6" /> Làm lại bài này</>
-                  )}
-                </button>
+            {/* Content Body */}
+            <div className="p-6 bg-white space-y-6">
+                
+                {/* Student Info Form */}
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4" /> Thông tin học sinh
+                  </h4>
+                  <input 
+                    type="text" 
+                    placeholder="Họ và tên học sinh" 
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                     <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Lớp" 
+                          value={className}
+                          onChange={(e) => setClassName(e.target.value)}
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                        />
+                        <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                     </div>
+                     <div className="relative">
+                        <input 
+                          type="text" 
+                          placeholder="Trường" 
+                          value={schoolName}
+                          onChange={(e) => setSchoolName(e.target.value)}
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm"
+                        />
+                        <School className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                     </div>
+                  </div>
 
-                {/* Secondary Actions Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                   <button 
-                     onClick={() => setShowResultModal(false)}
-                     className="py-3.5 px-4 rounded-xl font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
-                   >
-                      <ListChecks className="w-5 h-5" /> Xem lời giải
-                   </button>
-                   
-                   {mode === 'ASSESSMENT' && (
-                     <button
-                        onClick={handleShare}
-                        className="py-3.5 px-4 rounded-xl font-bold text-blue-700 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
-                     >
-                        <Share2 className="w-5 h-5" /> Chia sẻ
-                     </button>
-                   )}
+                  {/* Send Email Action */}
+                  <div className="pt-2">
+                     {!emailSent ? (
+                        <button 
+                          onClick={handleSendReport}
+                          disabled={isSendingEmail || !studentName || !className || !schoolName}
+                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                          {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          Gửi báo cáo cho giáo viên
+                        </button>
+                     ) : (
+                        <div className="w-full py-2.5 bg-green-100 text-green-700 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-green-200">
+                           <CheckCircle className="w-4 h-4" /> Đã gửi thành công!
+                        </div>
+                     )}
+                     {emailError && <p className="text-xs text-red-500 mt-2 text-center font-medium">{emailError}</p>}
+                  </div>
+                </div>
+
+                {/* Primary Navigation Actions */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <button 
+                      onClick={() => onFinish(calculateScore())}
+                      className={`w-full py-3.5 rounded-xl font-bold text-base text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2
+                        {(calculateScore() >= 8 || mode === 'PRACTICE') 
+                            ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' 
+                            : 'bg-slate-700 hover:bg-slate-800 shadow-slate-300'
+                        }`}
+                    >
+                      {(calculateScore() >= 8 || mode === 'PRACTICE') ? (
+                        <><ArrowRight className="w-5 h-5" /> {mode === 'PRACTICE' ? "Chọn bài khác" : "Học bài tiếp theo"}</>
+                      ) : (
+                        <><RotateCcw className="w-5 h-5" /> Làm lại bài này</>
+                      )}
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => setShowResultModal(false)}
+                        className="py-3 px-4 rounded-xl font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-sm"
+                      >
+                          <ListChecks className="w-4 h-4" /> Xem lời giải
+                      </button>
+                      
+                      {mode === 'ASSESSMENT' && (
+                        <button
+                            onClick={handleShare}
+                            className="py-3 px-4 rounded-xl font-bold text-blue-700 bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 text-sm"
+                        >
+                            <Share2 className="w-4 h-4" /> Chia sẻ
+                        </button>
+                      )}
+                    </div>
                 </div>
             </div>
           </div>

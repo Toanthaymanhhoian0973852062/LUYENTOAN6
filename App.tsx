@@ -6,9 +6,11 @@ import { QuizRunner } from './components/QuizRunner';
 import { NewsCard } from './components/NewsCard';
 import { ChatSupport } from './components/ChatSupport';
 import { AppScreen, UserProgress, QuizData, QuizMode, MathNews } from './types';
-import { BookOpen, Lock, CheckCircle, PlayCircle, Star, Loader2, Trophy, AlertCircle, Unlock, Sparkles } from 'lucide-react';
+import { BookOpen, Lock, CheckCircle, PlayCircle, Star, Loader2, Trophy, AlertCircle, Unlock, Sparkles, List, X } from 'lucide-react';
 
 const STORAGE_KEY = 'math6_kntt_progress';
+const NEWS_CACHE_KEY = 'math6_kntt_news_cache';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>(AppScreen.DASHBOARD);
@@ -22,8 +24,12 @@ export default function App() {
   const [news, setNews] = useState<MathNews | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
 
-  // Load progress on mount
+  // TOC State
+  const [showTOC, setShowTOC] = useState(false);
+
+  // Load progress and news on mount
   useEffect(() => {
+    // 1. Load Progress
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -33,19 +39,48 @@ export default function App() {
       }
     }
 
-    // Fetch News
-    const fetchNews = async () => {
+    // 2. Load News with Caching Strategy
+    const loadNews = async () => {
+      // Try to load from cache first
+      const cachedNewsRaw = localStorage.getItem(NEWS_CACHE_KEY);
+      if (cachedNewsRaw) {
+        try {
+          const cached = JSON.parse(cachedNewsRaw);
+          const now = Date.now();
+          // Check if cache is valid (less than 24 hours old)
+          if (now - cached.timestamp < CACHE_DURATION) {
+            setNews(cached.data);
+            return; // Exit, use cached data
+          }
+        } catch (e) {
+          console.error("Cache invalid", e);
+        }
+      }
+
+      // If no cache or expired, fetch new data
       setNewsLoading(true);
       try {
         const data = await generateMathNews();
         setNews(data);
+        // Save to cache
+        localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({
+          timestamp: Date.now(),
+          data: data
+        }));
       } catch (e) {
-        console.error("Failed to fetch news");
+        console.error("Failed to fetch news", e);
+        // Fallback content if API fails (Quota Exceeded)
+        setNews({
+            title: "Hệ thống đang bận",
+            content: "Hiện tại máy chủ AI đang quá tải. Bạn vẫn có thể làm bài tập bình thường nhé!",
+            imageUrl: undefined
+        });
       } finally {
         setNewsLoading(false);
       }
     };
-    fetchNews();
+
+    loadNews();
   }, []);
 
   // Save progress on change
@@ -67,8 +102,13 @@ export default function App() {
       const data = await generateQuiz(title, "Toán Lớp 6 - Kết nối tri thức");
       setQuizData(data);
       setScreen(AppScreen.QUIZ);
-    } catch (err) {
-      setError("Không thể tạo đề thi. Vui lòng thử lại sau.");
+    } catch (err: any) {
+      console.error(err);
+      let errorMessage = "Không thể tạo đề thi. Vui lòng thử lại sau.";
+      if (err.message && err.message.includes("quota")) {
+        errorMessage = "Hệ thống AI đang hết hạn mức phục vụ. Vui lòng quay lại sau 1-2 phút.";
+      }
+      setError(errorMessage);
       setScreen(AppScreen.DASHBOARD);
     }
   };
@@ -126,6 +166,15 @@ export default function App() {
     return 'FAILED';
   };
 
+  const scrollToChapter = (chapterId: string) => {
+    setShowTOC(false);
+    const element = document.getElementById(`chapter-${chapterId}`);
+    if (element) {
+      // The sticky header offset is roughly 140px, but scroll-margin-top handles it better
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   if (screen === AppScreen.LOADING) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -150,11 +199,11 @@ export default function App() {
       ) : (
         <>
           {/* Header */}
-          <header className="bg-white border-b sticky top-0 z-10">
+          <header className="bg-white border-b sticky top-0 z-10 shadow-sm">
             <div className="max-w-3xl mx-auto px-4 py-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="bg-blue-600 p-2 rounded-lg text-white">
+                  <div className="bg-blue-600 p-2 rounded-lg text-white shadow-blue-200 shadow-md">
                     <BookOpen className="w-6 h-6" />
                   </div>
                   <div>
@@ -162,25 +211,35 @@ export default function App() {
                     <p className="text-xs text-slate-500">Luyện tập & Đánh giá năng lực</p>
                   </div>
                 </div>
-                {mode === 'ASSESSMENT' && (
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
-                    <Trophy className="w-4 h-4 text-yellow-500" />
-                    <span>{(Object.values(progress.scores) as number[]).filter(s => s >= 8).length} bài hoàn thành</span>
-                  </div>
-                )}
+                
+                <div className="flex items-center gap-3">
+                  {mode === 'ASSESSMENT' && (
+                    <div className="hidden sm:flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+                      <Trophy className="w-4 h-4 text-yellow-500" />
+                      <span>{(Object.values(progress.scores) as number[]).filter(s => s >= 8).length} bài đạt</span>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => setShowTOC(true)}
+                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-transparent hover:border-slate-200"
+                    title="Mục lục"
+                  >
+                    <List className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
               
               {/* Mode Switcher Tabs */}
               <div className="flex p-1 bg-slate-100 rounded-lg">
                  <button 
                    onClick={() => setMode('ASSESSMENT')}
-                   className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${mode === 'ASSESSMENT' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                   className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${mode === 'ASSESSMENT' ? 'bg-white text-blue-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}
                  >
                    <BookOpen className="w-4 h-4" /> Theo Lộ Trình
                  </button>
                  <button 
                    onClick={() => setMode('PRACTICE')}
-                   className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${mode === 'PRACTICE' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                   className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${mode === 'PRACTICE' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'}`}
                  >
                    <Sparkles className="w-4 h-4" /> Luyện Tự Do
                  </button>
@@ -191,7 +250,7 @@ export default function App() {
           {/* Dashboard Content */}
           <main className="max-w-3xl mx-auto px-4 py-8 space-y-8 pb-32">
             {error && (
-              <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200 flex items-center gap-2">
+              <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                  <AlertCircle className="w-5 h-5" /> {error}
               </div>
             )}
@@ -211,7 +270,10 @@ export default function App() {
 
             {CURRICULUM.map((chapter) => (
               <div key={chapter.id} className="space-y-4">
-                <h2 className="text-lg font-bold text-slate-800 sticky top-[138px] bg-slate-50/95 py-2 backdrop-blur-sm z-0">
+                <h2 
+                  id={`chapter-${chapter.id}`}
+                  className="text-lg font-bold text-slate-800 sticky top-[138px] bg-slate-50/95 py-3 backdrop-blur-sm z-0 border-b border-slate-100 scroll-mt-48"
+                >
                   {chapter.title}
                 </h2>
                 <div className="grid gap-3">
@@ -280,6 +342,44 @@ export default function App() {
                Chương trình học bám sát SGK Kết Nối Tri Thức Với Cuộc Sống
             </div>
           </main>
+
+          {/* Table of Contents Modal */}
+          {showTOC && (
+            <div className="fixed inset-0 z-50 flex justify-end">
+              <div 
+                className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" 
+                onClick={() => setShowTOC(false)}
+              />
+              <div className="relative w-full max-w-xs bg-white h-full shadow-2xl p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
+                <div className="flex items-center justify-between mb-6 sticky top-0 bg-white z-10 pb-4 border-b">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <List className="w-5 h-5 text-blue-600" /> Mục Lục
+                  </h3>
+                  <button 
+                    onClick={() => setShowTOC(false)}
+                    className="p-1 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+                
+                <div className="space-y-2">
+                  {CURRICULUM.map((chapter) => (
+                    <button
+                      key={chapter.id}
+                      onClick={() => scrollToChapter(chapter.id)}
+                      className="w-full text-left p-3 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-700 font-medium text-sm transition-all border border-transparent hover:border-blue-100 group"
+                    >
+                      <span className="block text-xs font-bold text-slate-400 group-hover:text-blue-500 mb-0.5">
+                        {chapter.title.split(':')[0]}
+                      </span>
+                      {chapter.title.split(':')[1]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
