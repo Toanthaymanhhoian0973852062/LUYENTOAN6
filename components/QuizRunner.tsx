@@ -18,6 +18,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const [part3Answers, setPart3Answers] = useState<Record<number, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // New state for confirmation modal
   const [instantFeedback, setInstantFeedback] = useState(mode === 'PRACTICE');
   const [timeLeft, setTimeLeft] = useState(ASSESSMENT_DURATION);
 
@@ -35,7 +36,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   // Auto-submit when time runs out
   useEffect(() => {
     if (mode === 'ASSESSMENT' && timeLeft === 0 && !isSubmitted) {
-      handleSubmit(true);
+      handleAutoSubmit();
     }
   }, [timeLeft, mode, isSubmitted]);
 
@@ -73,22 +74,23 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
     return Math.max(0, Math.min(score, 10));
   };
 
-  const handleSubmit = (isAuto: boolean = false) => {
-    if (!isAuto) {
-      const minutesLeft = Math.ceil(timeLeft / 60);
-      const confirmMsg = mode === 'ASSESSMENT' 
-        ? `Thời gian còn lại: ${minutesLeft} phút.\n\nBạn có chắc chắn muốn nộp bài và xem kết quả ngay không?`
-        : "Bạn có chắc chắn muốn nộp bài và xem kết quả?";
-      
-      if (!window.confirm(confirmMsg)) return;
-    }
-    
+  // Called when user clicks "Nộp bài" button
+  const handleAttemptSubmit = () => {
+    setShowConfirmModal(true);
+  };
+
+  // Called when user confirms inside the modal
+  const confirmManualSubmit = () => {
+    setShowConfirmModal(false);
     setIsSubmitted(true);
-    setShowResultModal(true); // Show modal immediately
-    
-    if (isAuto) {
-      alert("Đã hết thời gian làm bài! Hệ thống đã tự động nộp bài của bạn.");
-    }
+    setShowResultModal(true);
+  };
+
+  // Called automatically when timer hits 0
+  const handleAutoSubmit = () => {
+    setIsSubmitted(true);
+    setShowResultModal(true);
+    alert("Đã hết thời gian làm bài! Hệ thống đã tự động nộp bài của bạn.");
   };
 
   const handleShare = async () => {
@@ -120,7 +122,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   };
 
   // Helper to check if we should show result for a question
-  // Show if submitted OR (Practice Mode AND Answered AND Instant Feedback On)
   const shouldShowResult = (isAnswered: boolean) => {
     return isSubmitted || (mode === 'PRACTICE' && instantFeedback && isAnswered);
   };
@@ -174,15 +175,12 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                   
                   if (showResult) {
                     if (isThisCorrect) {
-                        // Correct answer (whether selected or not)
                         btnClass = '!bg-green-600 !border-green-600 !text-white shadow-md ring-2 ring-green-100';
                         icon = <Check className="w-5 h-5 ml-2" />;
                     } else if (isSelected && !isThisCorrect) {
-                        // Wrong answer selected
                         btnClass = '!bg-red-500 !border-red-500 !text-white shadow-md ring-2 ring-red-100';
                         icon = <X className="w-5 h-5 ml-2" />;
                     } else {
-                        // Other wrong answers
                         btnClass = 'bg-gray-50 border-gray-100 text-gray-400 opacity-50';
                     }
                   }
@@ -434,11 +432,44 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
       {!isSubmitted && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-20 flex justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
            <button
-             onClick={() => handleSubmit(false)}
+             onClick={handleAttemptSubmit}
              className="w-full max-w-md bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
            >
              <CheckCircle className="w-5 h-5" /> Nộp bài
            </button>
+        </div>
+      )}
+
+      {/* Confirmation Modal - Replaces window.confirm */}
+      {!isSubmitted && showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center">
+              <div className="bg-yellow-100 p-3 rounded-full mb-4">
+                <AlertCircle className="w-8 h-8 text-yellow-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Nộp bài ngay?</h3>
+              <p className="text-gray-600 mb-6">
+                 {mode === 'ASSESSMENT' 
+                    ? `Bạn còn ${Math.ceil(timeLeft / 60)} phút. Bạn có chắc chắn muốn kết thúc bài làm không?` 
+                    : "Bạn có chắc chắn muốn nộp bài và xem kết quả?"}
+              </p>
+              <div className="flex gap-3 w-full">
+                <button 
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Kiểm tra lại
+                </button>
+                <button 
+                  onClick={confirmManualSubmit}
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                >
+                  Nộp bài
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
