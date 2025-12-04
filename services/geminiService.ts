@@ -7,25 +7,26 @@ let genAIInstance: GoogleGenAI | null = null;
 const getAI = () => {
   if (genAIInstance) return genAIInstance;
 
+  // Lấy API key từ Vite environment variable
   let apiKey = '';
-  try {
-    // Safe check to prevent "process is not defined" crash in browser environments
-    if (typeof process !== 'undefined' && process.env) {
-      apiKey = process.env.API_KEY || '';
-    }
-  } catch (e) {
-    console.error("Environment access error:", e);
+  
+  // Trong Vite, dùng import.meta.env thay vì process.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
   }
 
-  // Fallback check or throw friendly error
+  // Fallback: kiểm tra process.env (cho môi trường Node.js/build)
+  if (!apiKey && typeof process !== 'undefined' && process.env) {
+    apiKey = process.env.VITE_GEMINI_API_KEY || process.env.API_KEY || '';
+  }
+
   if (!apiKey) {
-    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'API_KEY' trên Vercel.");
+    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'VITE_GEMINI_API_KEY' trên Vercel.");
   }
 
   genAIInstance = new GoogleGenAI({ apiKey });
   return genAIInstance;
 };
-
 export const generateQuiz = async (topic: string, description: string): Promise<QuizData> => {
   try {
     const ai = getAI();
