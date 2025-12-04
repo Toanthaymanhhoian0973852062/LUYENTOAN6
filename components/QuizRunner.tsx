@@ -57,6 +57,14 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
     }
   }, [timeLeft, mode, isSubmitted, quizStarted]);
 
+  // AUTOMATIC EMAIL REPORTING EFFECT
+  useEffect(() => {
+    if (isSubmitted && !emailSent && !isSendingEmail) {
+      // Automatically send email when submitted
+      handleSendReport();
+    }
+  }, [isSubmitted]);
+
   const handleStartQuiz = () => {
     if (!studentName.trim() || !className.trim() || !schoolName.trim()) {
       alert("Vui lòng điền đầy đủ Họ tên, Lớp và Trường để bắt đầu!");
@@ -126,7 +134,7 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
 
   const handleSendReport = async () => {
     if (!studentName || !className || !schoolName) {
-      setEmailError('Vui lòng kiểm tra lại thông tin.');
+      // Should not happen as validation is done at start, but safety check
       return;
     }
 
@@ -144,7 +152,8 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
       setEmailSent(true);
     } catch (error) {
       console.error(error);
-      setEmailError('Gửi thất bại. Vui lòng kiểm tra kết nối hoặc cấu hình.');
+      // Fail silently to user or show small error, but don't block
+      setEmailError('Lỗi kết nối máy chủ báo cáo.');
     } finally {
       setIsSendingEmail(false);
     }
@@ -663,14 +672,14 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                 {/* Student Info (Read-only/Edit) */}
                 <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide mb-2 flex items-center gap-2">
-                    <User className="w-4 h-4" /> Thông tin đã đăng ký
+                    <User className="w-4 h-4" /> Thông tin thí sinh
                   </h4>
                   <input 
                     type="text" 
                     placeholder="Họ và tên học sinh" 
                     value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
+                    readOnly
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 outline-none text-sm bg-slate-100 text-slate-600 cursor-not-allowed"
                   />
                   <div className="grid grid-cols-2 gap-3">
                      <div className="relative">
@@ -678,8 +687,8 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                           type="text" 
                           placeholder="Lớp" 
                           value={className}
-                          onChange={(e) => setClassName(e.target.value)}
-                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
+                          readOnly
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 outline-none text-sm bg-slate-100 text-slate-600 cursor-not-allowed"
                         />
                         <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                      </div>
@@ -688,27 +697,30 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                           type="text" 
                           placeholder="Trường" 
                           value={schoolName}
-                          onChange={(e) => setSchoolName(e.target.value)}
-                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm bg-white"
+                          readOnly
+                          className="w-full px-4 py-2 pl-9 rounded-lg border border-slate-200 outline-none text-sm bg-slate-100 text-slate-600 cursor-not-allowed"
                         />
                         <School className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                      </div>
                   </div>
 
-                  {/* Send Email Action */}
+                  {/* Auto Send Email Status */}
                   <div className="pt-2">
                      {!emailSent ? (
-                        <button 
-                          onClick={handleSendReport}
-                          disabled={isSendingEmail || !studentName || !className || !schoolName}
-                          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                        >
-                          {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                          Gửi báo cáo cho giáo viên
-                        </button>
+                        <div className="w-full py-2.5 bg-indigo-50 text-indigo-700 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-indigo-100 animate-pulse">
+                          {isSendingEmail ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" /> Đang gửi báo cáo về máy chủ...
+                            </>
+                          ) : (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý kết quả...
+                            </>
+                          )}
+                        </div>
                      ) : (
                         <div className="w-full py-2.5 bg-green-100 text-green-700 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-green-200">
-                           <CheckCircle className="w-4 h-4" /> Đã gửi thành công!
+                           <CheckCircle className="w-4 h-4" /> Đã gửi kết quả cho giáo viên!
                         </div>
                      )}
                      {emailError && <p className="text-xs text-red-500 mt-2 text-center font-medium">{emailError}</p>}
