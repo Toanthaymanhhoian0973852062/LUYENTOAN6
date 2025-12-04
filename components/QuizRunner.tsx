@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { QuizData, QuizMode } from '../types';
-import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy, Send, School, User, GraduationCap, Loader2, Play } from 'lucide-react';
-import { sendScoreReport } from '../services/emailService';
+import { CheckCircle, ArrowLeft, Eye, EyeOff, Lightbulb, Clock, Check, X, AlertCircle, XCircle, Share2, RotateCcw, ArrowRight, ListChecks, Trophy, School, User, GraduationCap, Play } from 'lucide-react';
 
 interface QuizRunnerProps {
   quizData: QuizData;
@@ -32,11 +31,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const [studentName, setStudentName] = useState('');
   const [className, setClassName] = useState('');
   const [schoolName, setSchoolName] = useState('');
-  
-  // Email Sending State
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
-  const [emailError, setEmailError] = useState('');
 
   // Timer countdown logic
   useEffect(() => {
@@ -56,14 +50,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
       handleAutoSubmit();
     }
   }, [timeLeft, mode, isSubmitted, quizStarted]);
-
-  // AUTOMATIC EMAIL REPORTING EFFECT
-  useEffect(() => {
-    if (isSubmitted && !emailSent && !isSendingEmail) {
-      // Automatically send email when submitted
-      handleSendReport();
-    }
-  }, [isSubmitted]);
 
   const handleStartQuiz = () => {
     if (!studentName.trim() || !className.trim() || !schoolName.trim()) {
@@ -130,33 +116,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
   const handleAutoSubmit = () => {
     setIsSubmitted(true);
     setShowResultModal(true);
-  };
-
-  const handleSendReport = async () => {
-    if (!studentName || !className || !schoolName) {
-      // Should not happen as validation is done at start, but safety check
-      return;
-    }
-
-    setIsSendingEmail(true);
-    setEmailError('');
-
-    try {
-      await sendScoreReport({
-        studentName,
-        className,
-        schoolName,
-        score: calculateScore(),
-        topic: quizData.topic
-      });
-      setEmailSent(true);
-    } catch (error) {
-      console.error(error);
-      // Fail silently to user or show small error, but don't block
-      setEmailError('Lỗi kết nối máy chủ báo cáo.');
-    } finally {
-      setIsSendingEmail(false);
-    }
   };
 
   const handleShare = async () => {
@@ -702,28 +661,6 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({ quizData, mode, onFinish
                         />
                         <School className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                      </div>
-                  </div>
-
-                  {/* Auto Send Email Status */}
-                  <div className="pt-2">
-                     {!emailSent ? (
-                        <div className="w-full py-2.5 bg-indigo-50 text-indigo-700 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-indigo-100 animate-pulse">
-                          {isSendingEmail ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" /> Đang gửi báo cáo về máy chủ...
-                            </>
-                          ) : (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" /> Đang xử lý kết quả...
-                            </>
-                          )}
-                        </div>
-                     ) : (
-                        <div className="w-full py-2.5 bg-green-100 text-green-700 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-green-200">
-                           <CheckCircle className="w-4 h-4" /> Đã gửi kết quả cho giáo viên!
-                        </div>
-                     )}
-                     {emailError && <p className="text-xs text-red-500 mt-2 text-center font-medium">{emailError}</p>}
                   </div>
                 </div>
 

@@ -8,7 +8,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', '@google/genai', '@emailjs/browser', 'lucide-react'],
+          vendor: ['react', 'react-dom', '@google/genai', 'lucide-react'],
         },
       },
     },

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Content } from "@google/genai";
 import { QuizData, MathNews } from "../types";
 
@@ -6,12 +7,34 @@ let genAIInstance: GoogleGenAI | null = null;
 const getAI = () => {
   if (genAIInstance) return genAIInstance;
 
-  // Following guideline: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-  const apiKey = process.env.API_KEY;
+  let apiKey = '';
+
+  // 1. Try accessing via Vite's import.meta.env (Standard for Vite apps)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      apiKey = import.meta.env.VITE_API_KEY;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  // 2. Fallback to process.env (Node/Vercel standard)
+  if (!apiKey) {
+    try {
+      // Check if process exists to avoid ReferenceError
+      if (typeof process !== 'undefined' && process.env) {
+        apiKey = process.env.API_KEY || process.env.VITE_API_KEY || '';
+      }
+    } catch (e) {
+      // Ignore error
+    }
+  }
 
   if (!apiKey) {
-    console.error("Thiếu API Key. Vui lòng kiểm tra biến môi trường process.env.API_KEY");
-    throw new Error("Không tìm thấy API Key (process.env.API_KEY).");
+    console.error("CRITICAL: Missing API Key.");
+    throw new Error("Chưa cấu hình API Key. Vui lòng kiểm tra VITE_API_KEY trong cấu hình Vercel hoặc file .env");
   }
 
   genAIInstance = new GoogleGenAI({ apiKey });
@@ -46,6 +69,19 @@ const FALLBACK_NEWS_ITEMS: MathNews[] = [
     imageUrl: "https://images.unsplash.com/photo-1590595906931-81f04f0ccebb?w=800&q=80"
   }
 ];
+
+// Clean JSON string from Markdown code blocks often returned by LLMs
+const cleanJsonString = (str: string): string => {
+  if (!str) return "{}";
+  let cleaned = str.trim();
+  // Remove ```json and ``` wrapping
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json/, '').replace(/```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```/, '').replace(/```$/, '');
+  }
+  return cleaned.trim();
+};
 
 export const generateQuiz = async (topic: string, description: string): Promise<QuizData> => {
   try {
@@ -146,7 +182,8 @@ export const generateQuiz = async (topic: string, description: string): Promise<
     });
 
     if (response.text) {
-      return JSON.parse(response.text) as QuizData;
+      // Use cleaner function to prevent JSON parse errors
+      return JSON.parse(cleanJsonString(response.text)) as QuizData;
     }
     throw new Error("Không nhận được dữ liệu từ Gemini");
 
@@ -187,7 +224,7 @@ export const generateMathNews = async (): Promise<MathNews> => {
       }
     });
 
-    const newsData = JSON.parse(textResponse.text || "{}");
+    const newsData = JSON.parse(cleanJsonString(textResponse.text || "{}"));
     if (!newsData.title) throw new Error("Invalid news data");
 
     // Step 2: Generate Image using the prompt from Step 1
