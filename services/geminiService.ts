@@ -2,10 +2,33 @@
 import { GoogleGenAI, Type, Content } from "@google/genai";
 import { QuizData, MathNews } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let genAIInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (genAIInstance) return genAIInstance;
+
+  let apiKey = '';
+  try {
+    // Safe check to prevent "process is not defined" crash in browser environments
+    if (typeof process !== 'undefined' && process.env) {
+      apiKey = process.env.API_KEY || '';
+    }
+  } catch (e) {
+    console.error("Environment access error:", e);
+  }
+
+  // Fallback check or throw friendly error
+  if (!apiKey) {
+    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'API_KEY' trên Vercel.");
+  }
+
+  genAIInstance = new GoogleGenAI({ apiKey });
+  return genAIInstance;
+};
 
 export const generateQuiz = async (topic: string, description: string): Promise<QuizData> => {
   try {
+    const ai = getAI();
     const prompt = `
       Tạo đề kiểm tra Toán 6 (Kết nối tri thức) cho bài: "${topic} - ${description}".
       Cấu trúc đề BẮT BUỘC như sau (Tổng 10 điểm):
@@ -111,6 +134,7 @@ export const generateQuiz = async (topic: string, description: string): Promise<
 
 export const generateMathNews = async (): Promise<MathNews> => {
   try {
+    const ai = getAI();
     // Step 1: Generate Text Content
     const textPrompt = `
       Hãy tạo một bản tin ngắn thú vị về toán học dành cho học sinh lớp 6. 
@@ -186,6 +210,7 @@ export const generateMathNews = async (): Promise<MathNews> => {
 
 export const getChatResponse = async (history: Content[], newMessage: string): Promise<string> => {
   try {
+    const ai = getAI();
     const chat = ai.chats.create({
       model: 'gemini-2.5-flash',
       config: {
