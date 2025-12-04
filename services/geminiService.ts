@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 
 import { GoogleGenAI, Type, Content } from "@google/genai";
 import { QuizData, MathNews } from "../types";
@@ -8,18 +9,24 @@ const getAI = () => {
   if (genAIInstance) return genAIInstance;
 
   let apiKey = '';
-  try {
-    // Safe check to prevent "process is not defined" crash in browser environments
-    if (typeof process !== 'undefined' && process.env) {
-      apiKey = process.env.API_KEY || '';
+  
+  // Priority 1: Vite Environment Variable (Standard for Vercel/Vite)
+  if (import.meta.env && import.meta.env.VITE_API_KEY) {
+    apiKey = import.meta.env.VITE_API_KEY;
+  }
+  // Priority 2: Process Environment (Fallback/Legacy)
+  else {
+    try {
+      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+        apiKey = process.env.API_KEY;
+      }
+    } catch (e) {
+      // Ignore process access errors in browser
     }
-  } catch (e) {
-    console.error("Environment access error:", e);
   }
 
-  // Fallback check or throw friendly error
   if (!apiKey) {
-    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'API_KEY' trên Vercel.");
+    throw new Error("Không tìm thấy API Key. Vui lòng cấu hình biến môi trường 'VITE_API_KEY' trên Vercel.");
   }
 
   genAIInstance = new GoogleGenAI({ apiKey });
